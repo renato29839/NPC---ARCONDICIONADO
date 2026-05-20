@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NPC - MANUTENÇÃO</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-container">
+        <header>
+            <h1>NPC - MANUTENÇÃO</h1>
+            <p>Controle de Equipamentos e Ordem de Serviço - Ar Condicionado</p>
+        </header>
+
+        <form id="form-manutencao" novalidate>
+            
+            <div class="form-section">
+                <h2>1. Localização</h2>
+                
+                <div class="input-group">
+                    <label for="cliente">Identificação do Cliente *</label>
+                    <select id="cliente" required>
+                        <option value="" disabled selected>Selecione o cliente...</option>
+                        <option value="MATRIZ">MATRIZ</option>
+                        <option value="LIFE">LIFE</option>
+                        <option value="SUL">SUL</option>
+                    </select>
+                    <span class="error-message">Por favor, selecione uma das opções de cliente.</span>
+                </div>
+
+                <div class="input-group">
+                    <label for="localizacao_aparelho">Localização do Equipamento *</label>
+                    <input type="text" id="localizacao_aparelho" required placeholder="Ex: Sala de Reunião, CPD, Recepção">
+                    <span class="error-message">Informe onde o equipamento está instalado.</span>
+                </div>
+
+                <div class="input-group">
+                    <label for="endereco">Endereço Completo *</label>
+                    <input type="text" id="endereco" required readonly placeholder="Selecione o cliente para preencher automaticamente">
+                </div>
+            </div>
+
+            <div class="form-section">
+                <h2>2. Informações do Equipamento</h2>
+
+                <div class="input-group">
+                    <label>Tipo de Equipamento *</label>
+                    <div class="radio-tile-group">
+                        <label class="radio-tile">
+                            <input type="radio" name="tipo_equipamento" value="Split" required>
+                            <span class="radio-label">Split</span>
+                        </label>
+                        <label class="radio-tile">
+                            <input type="radio" name="tipo_equipamento" value="Janela">
+                            <span class="radio-label">Janela</span>
+                        </label>
+                        <label class="radio-tile">
+                            <input type="radio" name="tipo_equipamento" value="Central">
+                            <span class="radio-label">Central</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="input-group">
+                        <label for="marca">Marca *</label>
+                        <input type="text" id="marca" required placeholder="Ex: Carrier, LG">
+                    </div>
+                    <div class="input-group">
+                        <label for="modelo">Modelo *</label>
+                        <input type="text" id="modelo" required placeholder="Ex: ASNW122">
+                    </div>
+                </div>
+
+                <div class="input-group">
+                    <label for="numero_serie">Número de Série *</label>
+                    <input type="text" id="numero_serie" required placeholder="Ex: SN-987654321">
+                </div>
+            </div>
+
+            <div class="form-section">
+                <h2>3. O Serviço</h2>
+
+                <div class="form-row">
+                    <div class="input-group">
+                        <label for="data_manutencao">Data do Serviço *</label>
+                        <input type="date" id="data_manutencao" required>
+                    </div>
+                </div>
+
+                <div class="input-group">
+                    <label>Tipo de Manutenção *</label>
+                    <div class="radio-tile-group">
+                        <label class="radio-tile">
+                            <input type="radio" name="tipo_manutencao" value="Preventiva" required>
+                            <span class="radio-label">Preventiva</span>
+                        </label>
+                        <label class="radio-tile">
+                            <input type="radio" name="tipo_manutencao" value="Corretiva">
+                            <span class="radio-label">Corretiva</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="input-group">
+                    <label for="descricao_problema">Descrição do Problema / Estado Inicial *</label>
+                    <div class="textarea-voice-wrapper">
+                        <textarea id="descricao_problema" rows="3" required placeholder="Relate ruídos, vazamentos..."></textarea>
+                        <button type="button" class="btn-voice" data-target="descricao_problema" title="Digitar por voz">🎙️</button>
+                    </div>
+                </div>
+
+                <div class="input-group">
+                    <label for="acoes_realizadas">Ações Realizadas *</label>
+                    <div class="textarea-voice-wrapper">
+                        <textarea id="acoes_realizadas" rows="3" required placeholder="Ex: Limpeza de filtros, higienização..."></textarea>
+                        <button type="button" class="btn-voice" data-target="acoes_realizadas" title="Digitar por voz">🎙️</button>
+                    </div>
+                </div>
+
+                <div class="input-group">
+                    <label for="pecas_substituidas">Peças Substituídas (Se houver)</label>
+                    <input type="text" id="pecas_substituidas" placeholder="Ex: Capacitor 35uF">
+                </div>
+            </div>
+
+            <div class="form-section">
+                <h2>4. Evidências & Parecer Técnico</h2>
+
+                <div class="input-group">
+                    <label>Fotos e Vídeos do Estado do Equipamento *</label>
+                    <div class="upload-container">
+                        <label for="arquivos_midia" class="btn-upload-design">
+                            <span>📸 Capturar ou Anexar Mídias</span>
+                        </label>
+                        <input type="file" id="arquivos_midia" accept="image/*,video/*" multiple class="hidden">
+                    </div>
+                    <div id="galeria-preview" class="grid-galeria"></div>
+                </div>
+
+                <div class="input-group">
+                    <label for="parecer_final">Parecer Final Técnico / Recomendações *</label>
+                    <div class="textarea-voice-wrapper">
+                        <textarea id="parecer_final" rows="3" required placeholder="Deixe aqui as considerações finais sobre o estado do aparelho..."></textarea>
+                        <button type="button" class="btn-voice" data-target="parecer_final" title="Digitar por voz">🎙️</button>
+                    </div>
+                </div>
+
+                <div class="input-group">
+                    <label>Status Final do Equipamento *</label>
+                    <div class="radio-tile-group">
+                        <label class="radio-tile status-concluido">
+                            <input type="radio" name="status_servico" value="Concluido" required>
+                            <span class="radio-label">🟢 Concluído</span>
+                        </label>
+                        <label class="radio-tile status-pendente">
+                            <input type="radio" name="status_servico" value="Pendente">
+                            <span class="radio-label">🟡 Pendente</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <button type="submit" class="btn-submit" id="btn-finalizar">Finalizar e Alimentar Planilha</button>
+        </form>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

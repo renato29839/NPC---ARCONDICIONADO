@@ -90,6 +90,100 @@ document.addEventListener('DOMContentLoaded', () => {
         recognition.onend = () => { if (botaoAtivo) { botaoAtivo.classList.remove('listening'); botaoAtivo.innerText = "🎙️"; } };
     }
 
+    // =========================================================================
+    // LÓGICA DO CANVAS DE ASSINATURA DIGITAL
+    // =========================================================================
+    const canvas = document.getElementById('canvas-assinatura');
+    const btnLimpar = document.getElementById('btn-limpar-assinatura');
+    const inputAssinaturaBase64 = document.getElementById('assinatura_base64');
+    const erroAssinatura = document.getElementById('erro-assinatura');
+    let desenhando = false;
+    let assinaturaDesenhada = false; // Controle de validação do preenchimento
+
+    if (canvas) {
+        const ctx = canvas.getContext('2d');
+        
+        // Ajusta a resolução interna do canvas baseado no tamanho de tela (evita borrão)
+        function ajustarResolucaoCanvas() {
+            const rect = canvas.getBoundingClientRect();
+            canvas.width = rect.width;
+            canvas.height = rect.height;
+            // Configurações do traço da caneta
+            ctx.strokeStyle = '#000000';
+            ctx.lineWidth = 3;
+            ctx.lineJoin = 'round';
+            ctx.lineCap = 'round';
+            assinaturaDesenhada = false;
+            if(inputAssinaturaBase64) inputAssinaturaBase64.value = '';
+        }
+        
+        ajustarResolucaoCanvas();
+        window.addEventListener('resize', ajustarResolucaoCanvas);
+
+        // Função para capturar as coordenadas exatas
+        function obterPosicao(e) {
+            const rect = canvas.getBoundingClientRect();
+            if (e.touches && e.touches.length > 0) {
+                return {
+                    x: e.touches[0].clientX - rect.left,
+                    y: e.touches[0].clientY - rect.top
+                };
+            }
+            return {
+                x: e.clientX - rect.left,
+                y: e.clientY - rect.top
+            };
+        }
+
+        function iniciarDesenho(e) {
+            desenhando = true;
+            const pos = obterPosicao(e);
+            ctx.beginPath();
+            ctx.moveTo(pos.x, pos.y);
+            e.preventDefault();
+        }
+
+        function desenhar(e) {
+            if (!desenhando) return;
+            const pos = obterPosicao(e);
+            ctx.lineTo(pos.x, pos.y);
+            ctx.stroke();
+            assinaturaDesenhada = true; // Confirma que houve interação válida
+            if(erroAssinatura) erroAssinatura.style.display = 'none';
+            e.preventDefault();
+        }
+
+        function pararDesenho() {
+            if (desenhando) {
+                desenhando = false;
+                // Atualiza em tempo real o input oculto com o conteúdo em imagem
+                if (assinaturaDesenhada && inputAssinaturaBase64) {
+                    inputAssinaturaBase64.value = canvas.toDataURL('image/png');
+                }
+            }
+        }
+
+        // Eventos para Desktop (Mouse)
+        canvas.addEventListener('mousedown', iniciarDesenho);
+        canvas.addEventListener('mousemove', desenhar);
+        window.addEventListener('mouseup', pararDesenho);
+
+        // Eventos para Dispositivos Móveis (Touchscreen)
+        canvas.addEventListener('touchstart', iniciarDesenho, { passive: false });
+        canvas.addEventListener('touchmove', desenhar, { passive: false });
+        canvas.addEventListener('touchend', pararDesenho);
+
+        // Botão para limpar a assinatura do quadro
+        if (btnLimpar) {
+            btnLimpar.addEventListener('click', () => {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                assinaturaDesenhada = false;
+                if(inputAssinaturaBase64) inputAssinaturaBase64.value = '';
+            });
+        }
+    }
+    // =========================================================================
+
     // Envio unificado e robusto
     if (form) {
         form.addEventListener('submit', function(event) {
@@ -112,7 +206,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
 
-            if (!valido) { alert('Por favor, preencha todos os campos obrigatórios marcados com (*).'); return; }
+            // Validação customizada da assinatura digital obrigatória
+            if (!assinaturaDesenhada) {
+                valido = false;
+                if(erroAssinatura) erroAssinatura.style.display = 'block';
+                const containerAssinatura = document.querySelector('.signature-container');
+                if(containerAssinatura) containerAssinatura.style.borderColor = '#ff4d4d';
+            }
+
+            if (!valido) { alert('Por favor, preencha todos os campos obrigatórios marcados com (*) e colha a assinatura.'); return; }
 
             const btnFinalizar = document.getElementById('btn-finalizar');
             if (btnFinalizar) {
@@ -141,6 +243,9 @@ document.addEventListener('DOMContentLoaded', () => {
             dadosParaEnvio.append('status_servico', radioStatus ? radioStatus.value : 'Pendente');
             dadosParaEnvio.append('parecer_final', document.getElementById('parecer_final').value);
             
+            // Inclusão da Assinatura no envio para a Planilha
+            dadosParaEnvio.append('assinatura_responsavel', inputAssinaturaBase64 ? inputAssinaturaBase64.value : '');
+
             // Tratamento das Mídias
             dadosParaEnvio.append('num_arquivos', listaDeArquivosJson.length);
             listaDeArquivosJson.forEach((arquivo, index) => {
@@ -158,6 +263,14 @@ document.addEventListener('DOMContentLoaded', () => {
             .then(() => {
                 alert('Sucesso absoluto! Dados e mídias salvos na planilha.');
                 form.reset();
+                
+                // Reseta estados do Canvas pós-envio de sucesso
+                if (canvas) {
+                    const ctx = canvas.getContext('2d');
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                }
+                assinaturaDesenhada = false;
+
                 if(campoDataManutencao) campoDataManutencao.value = new Date().toISOString().split('T')[0];
                 if(galeriaPreview) galeriaPreview.innerHTML = '';
                 listaDeArquivosJson = [];

@@ -74,7 +74,7 @@
                 </div>
 
                 <div class="input-group">
-                    <label for="numero_serie">Número de Série *</label>
+                    <label Disorder for="numero_serie">Número de Série *</label>
                     <input type="text" id="numero_serie" required placeholder="Ex: SN-987654321">
                 </div>
             </div>
@@ -159,6 +159,16 @@
                             <span class="radio-label">🟡 Pendente</span>
                         </label>
                     </div>
+                </div>
+
+                <div class="input-group">
+                    <label>Assinatura do Responsável na Unidade *</label>
+                    <div class="signature-container">
+                        <canvas id="canvas-assinatura" width="500" height="200"></canvas>
+                        <button type="button" id="btn-limpar-assinatura">Limpar</button>
+                    </div>
+                    <input type="hidden" id="assinatura_base64" name="assinatura_base64" required>
+                    <span class="error-message" id="erro-assinatura" style="display:none; color: var(--error);">Por favor, colha a assinatura do responsável.</span>
                 </div>
             </div>
 

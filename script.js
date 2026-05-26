@@ -4,7 +4,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if(campoDataManutencao) campoDataManutencao.value = new Date().toISOString().split('T')[0];
 
     // ⚠️ SUA URL DO GOOGLE APPS SCRIPT
-    const URL_DA_SUA_PLANILHA = "https://script.google.com/macros/s/AKfycbwnuj2wVx0GsPgVwYShWAJbE69sI6oEyrc_lvhGZ9hfsu_yepOt2RyT5rUcob6HstyRWw/exec";
+    const URL_DA_SUA_PLANILHA = "https://script.google.com/macros/s/AKfycbz4LjUGPldNg0BdH92MjcR5S03m2aUe9lqyDaALyKcj_uKEU0fReN1Vkn2uYkY8BFGbrg/exec";
 
     // Automação de Endereços por Cliente Fixos
     const selectCliente = document.getElementById('cliente');

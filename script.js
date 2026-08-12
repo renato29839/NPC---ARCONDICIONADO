@@ -1,290 +1,303 @@
 document.addEventListener('DOMContentLoaded', () => {
-    const form = document.getElementById('form-manutencao');
-    const campoDataManutencao = document.getElementById('data_manutencao');
-    if(campoDataManutencao) campoDataManutencao.value = new Date().toISOString().split('T')[0];
+    'use strict';
 
-    // ⚠️ SUA URL DO GOOGLE APPS SCRIPT
-    const URL_DA_SUA_PLANILHA = "https://script.google.com/macros/s/AKfycbzbrBAFdZWM_8AnX9l0ufqwefkxKR3OlDX9LXggOY2bk9m-RFN6axJjOiHOfthmoK7hZA/exec";
-
-    // Automação de Endereços por Cliente Fixos
-    const selectCliente = document.getElementById('cliente');
-    const inputEndereco = document.getElementById('endereco');
-    const enderecosClientes = {
-        'MATRIZ': 'Rua Desembargador Leite Albuquerque, 1320 - Aldeota',
-        'LIFE': 'Rua Coronel Linhares, 1143 - Aldeota',
-        'SUL': 'Rua Virgilio Paes, 3020 - Cidades dos Funcionários'
+    // O Apps Script deve responder JSON, por exemplo: { "success": true }.
+    // Proteja o endpoint no servidor; a URL pública não é um mecanismo de autenticação.
+    const API_URL = 'https://script.google.com/macros/s/AKfycbwGdWI7gQOrZoJ_N_FM9bIasI4A1uwecSWL5HqVQ83xCxqGGrUsRULk7GYhw8ETUIqsYQ/exec';
+    const STORAGE_KEY = 'formulario_manutencao_v2';
+    const CONFIG = {
+        maxFiles: 5,
+        maxImageSize: 5 * 1024 * 1024,
+        maxVideoSize: 10 * 1024 * 1024,
+        maxTotalSize: 15 * 1024 * 1024,
+        imageQuality: 0.8,
+        imageMaxWidth: 1600,
+        imageMaxHeight: 1600,
+        minSignatureStrokes: 5,
+        requestTimeout: 30000
+    };
+    const addresses = {
+        MATRIZ: 'Rua Desembargador Leite Albuquerque, 1320 - Aldeota',
+        LIFE: 'Rua Coronel Linhares, 1143 - Aldeota',
+        SUL: 'Rua Virgilio Paes, 3020 - Cidades dos Funcionários'
     };
 
-    if (selectCliente) {
-        selectCliente.addEventListener('change', (e) => {
-            const clienteSelecionado = e.target.value;
-            if (enderecosClientes[clienteSelecionado] && inputEndereco) {
-                inputEndereco.value = enderecosClientes[clienteSelecionado];
-            }
-        });
+    const form = document.getElementById('form-manutencao');
+    const $ = (selector) => document.querySelector(selector);
+    const fields = {
+        client: $('#cliente'), address: $('#endereco'), date: $('#data_manutencao'),
+        media: $('#arquivos_midia'), gallery: $('#galeria-preview'), mediaCount: $('#media-count'),
+        canvas: $('#canvas-assinatura'), signature: $('#assinatura_base64'), signatureError: $('#erro-assinatura'),
+        clearSignature: $('#btn-limpar-assinatura'), submit: $('#btn-finalizar')
+    };
+    let media = [];
+    let sending = false;
+    let strokes = 0;
+    let drawing = false;
+    let lastFocus = null;
+
+    function localDate() {
+        const now = new Date();
+        const offset = now.getTimezoneOffset() * 60000;
+        return new Date(now - offset).toISOString().slice(0, 10);
     }
 
-    // Gerenciador de Arquivos local (Fotos/Vídeos)
-    let listaDeArquivosJson = [];
-    const inputMidia = document.getElementById('arquivos_midia');
-    const galeriaPreview = document.getElementById('galeria-preview');
+    function updateAddress() {
+        fields.address.value = addresses[fields.client.value] || '';
+    }
 
-    if (inputMidia) {
-        inputMidia.addEventListener('change', (e) => {
-            Array.from(e.target.files).forEach(file => {
-                const reader = new FileReader();
-                reader.readAsDataURL(file);
-                reader.onload = () => {
-                    listaDeArquivosJson.push({
-                        base64: reader.result,
-                        type: file.type
-                    });
+    function setTodayIfEmpty() {
+        if (!fields.date.value) fields.date.value = localDate();
+    }
 
-                    const box = document.createElement('div');
-                    box.classList.add('item-midia-preview');
-                    
-                    if (file.type.startsWith('image/')) {
-                        const img = document.createElement('img');
-                        img.src = reader.result;
-                        box.appendChild(img);
-                    } else {
-                        const vid = document.createElement('video');
-                        vid.src = reader.result;
-                        box.appendChild(vid);
-                    }
-                    
-                    const btnDel = document.createElement('button');
-                    btnDel.innerHTML = '✕';
-                    btnDel.classList.add('btn-remover-midia');
-                    btnDel.type = 'button';
-                    btnDel.onclick = () => {
-                        listaDeArquivosJson = listaDeArquivosJson.filter(item => item.base64 !== reader.result);
-                        box.remove();
-                    };
-                    box.appendChild(btnDel);
-                    if (galeriaPreview) galeriaPreview.appendChild(box);
-                };
+    function setModal(id, visible) {
+        const modal = document.getElementById(id);
+        if (!modal) return;
+        modal.classList.toggle('hidden', !visible);
+        if (visible) {
+            lastFocus = document.activeElement;
+            modal.querySelector('button, [tabindex]')?.focus();
+        } else if (lastFocus instanceof HTMLElement) {
+            lastFocus.focus();
+        }
+    }
+
+    function closeModals() {
+        ['modal-confirmacao', 'modal-sucesso', 'modal-erro'].forEach((id) => setModal(id, false));
+    }
+
+    function showError(message) {
+        $('#modal-erro-mensagem').textContent = message;
+        setModal('modal-erro', true);
+    }
+
+    function humanSize(bytes) {
+        return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+    }
+
+    function totalMediaSize() {
+        return media.reduce((total, item) => total + item.size, 0);
+    }
+
+    function updateMediaCount() {
+        const count = media.length;
+        fields.mediaCount.textContent = count
+            ? `${count} mídia${count > 1 ? 's' : ''} anexada${count > 1 ? 's' : ''} (${humanSize(totalMediaSize())}).`
+            : 'Nenhuma mídia anexada.';
+    }
+
+    function renderMedia() {
+        fields.gallery.replaceChildren();
+        media.forEach((item) => {
+            const box = document.createElement('div');
+            box.className = 'item-midia-preview';
+            const element = document.createElement(item.type.startsWith('image/') ? 'img' : 'video');
+            element.src = item.dataUrl;
+            element.alt = item.type.startsWith('image/') ? `Foto: ${item.name}` : `Vídeo: ${item.name}`;
+            if (element instanceof HTMLVideoElement) element.muted = true;
+            box.append(element);
+            const remove = document.createElement('button');
+            remove.type = 'button';
+            remove.className = 'btn-remover-midia';
+            remove.textContent = '×';
+            remove.setAttribute('aria-label', `Remover ${item.name}`);
+            remove.addEventListener('click', () => {
+                media = media.filter((mediaItem) => mediaItem.id !== item.id);
+                renderMedia();
+                validateMedia();
             });
-            inputMidia.value = '';
+            box.append(remove);
+            fields.gallery.append(box);
+        });
+        updateMediaCount();
+    }
+
+    function readAsDataUrl(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onerror = () => reject(new Error(`Não foi possível ler ${file.name}.`));
+            reader.onload = () => resolve(reader.result);
+            reader.readAsDataURL(file);
         });
     }
 
-    // Digitação por voz
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (SpeechRecognition) {
-        const recognition = new SpeechRecognition();
+    async function compressImage(file) {
+        const source = await readAsDataUrl(file);
+        const image = new Image();
+        await new Promise((resolve, reject) => { image.onload = resolve; image.onerror = reject; image.src = source; });
+        const ratio = Math.min(1, CONFIG.imageMaxWidth / image.width, CONFIG.imageMaxHeight / image.height);
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(image.width * ratio);
+        canvas.height = Math.round(image.height * ratio);
+        canvas.getContext('2d').drawImage(image, 0, 0, canvas.width, canvas.height);
+        const blob = await new Promise((resolve, reject) => canvas.toBlob((result) => result ? resolve(result) : reject(new Error('Falha ao comprimir imagem.')), 'image/jpeg', CONFIG.imageQuality));
+        return { dataUrl: await readAsDataUrl(blob), size: blob.size, type: 'image/jpeg' };
+    }
+
+    async function addMedia(files) {
+        const messages = [];
+        for (const file of files) {
+            if (media.length >= CONFIG.maxFiles) { messages.push(`Limite de ${CONFIG.maxFiles} arquivos atingido.`); break; }
+            const isImage = file.type.startsWith('image/');
+            const isVideo = file.type.startsWith('video/');
+            if (!isImage && !isVideo) { messages.push(`${file.name}: formato não aceito.`); continue; }
+            if (file.size > (isImage ? CONFIG.maxImageSize : CONFIG.maxVideoSize)) { messages.push(`${file.name}: excede o tamanho permitido.`); continue; }
+            try {
+                const processed = isImage ? await compressImage(file) : { dataUrl: await readAsDataUrl(file), size: file.size, type: file.type };
+                if (totalMediaSize() + processed.size > CONFIG.maxTotalSize) { messages.push(`${file.name}: excede o limite total de ${humanSize(CONFIG.maxTotalSize)}.`); continue; }
+                media.push({ id: crypto.randomUUID?.() || `${Date.now()}-${Math.random()}`, name: file.name, ...processed });
+            } catch (error) { messages.push(error.message); }
+        }
+        renderMedia();
+        validateMedia();
+        if (messages.length) showError(messages.join(' '));
+    }
+
+    function mediaGroup() { return fields.media.closest('.input-group'); }
+    function validateMedia() {
+        const valid = media.length > 0;
+        mediaGroup().classList.toggle('invalid', !valid);
+        return valid;
+    }
+
+    function initVoiceInput() {
+        const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!Recognition) {
+            document.querySelectorAll('.btn-voice').forEach((button) => {
+                button.hidden = true;
+            });
+            return;
+        }
+        const recognition = new Recognition();
         recognition.lang = 'pt-BR';
-        let elementoDestino = null;
-        let botaoAtivo = null;
-
-        document.querySelectorAll('.btn-voice').forEach(botao => {
-            botao.addEventListener('click', () => {
-                elementoDestino = document.getElementById(botao.getAttribute('data-target'));
-                botaoAtivo = botao;
-                try { recognition.start(); } catch (e) { recognition.stop(); }
-            });
-        });
-
-        recognition.onstart = () => { if (botaoAtivo) { botaoAtivo.classList.add('listening'); botaoAtivo.innerText = "🛑"; } };
-        recognition.onresult = (event) => { if (elementoDestino) elementoDestino.value += (elementoDestino.value ? ' ' : '') + event.results[0][0].transcript; };
-        recognition.onend = () => { if (botaoAtivo) { botaoAtivo.classList.remove('listening'); botaoAtivo.innerText = "🎙️"; } };
+        recognition.interimResults = false;
+        let activeButton = null;
+        let target = null;
+        document.querySelectorAll('.btn-voice').forEach((button) => button.addEventListener('click', () => {
+            if (activeButton) recognition.stop();
+            target = document.getElementById(button.dataset.target);
+            activeButton = button;
+            try { recognition.start(); } catch { /* reconhecimento já está sendo encerrado */ }
+        }));
+        recognition.onstart = () => { activeButton?.classList.add('listening'); activeButton?.setAttribute('aria-label', 'Parar ditado'); };
+        recognition.onresult = (event) => {
+            if (target) target.value += `${target.value ? ' ' : ''}${event.results[0][0].transcript}`;
+            target?.dispatchEvent(new Event('input', { bubbles: true }));
+        };
+        recognition.onerror = () => { if (activeButton) showError('Não foi possível usar o reconhecimento de voz.'); };
+        recognition.onend = () => { activeButton?.classList.remove('listening'); activeButton?.removeAttribute('aria-label'); activeButton = null; };
     }
 
-    // =========================================================================
-    // LÓGICA DO CANVAS DE ASSINATURA DIGITAL
-    // =========================================================================
-    const canvas = document.getElementById('canvas-assinatura');
-    const btnLimpar = document.getElementById('btn-limpar-assinatura');
-    const inputAssinaturaBase64 = document.getElementById('assinatura_base64');
-    const erroAssinatura = document.getElementById('erro-assinatura');
-    let desenhando = false;
-    let assinaturaDesenhada = false; // Controle de validação do preenchimento
-
-    if (canvas) {
-        const ctx = canvas.getContext('2d');
-        
-        // Ajusta a resolução interna do canvas baseado no tamanho de tela (evita borrão)
-        function ajustarResolucaoCanvas() {
+    function initSignature() {
+        const { canvas, signature, signatureError } = fields;
+        const context = canvas.getContext('2d');
+        let previous = null;
+        const setupCanvas = () => {
+            const saved = canvas.width ? canvas.toDataURL() : null;
             const rect = canvas.getBoundingClientRect();
-            canvas.width = rect.width;
-            canvas.height = rect.height;
-            // Configurações do traço da caneta
-            ctx.strokeStyle = '#000000';
-            ctx.lineWidth = 3;
-            ctx.lineJoin = 'round';
-            ctx.lineCap = 'round';
-            assinaturaDesenhada = false;
-            if(inputAssinaturaBase64) inputAssinaturaBase64.value = '';
-        }
-        
-        ajustarResolucaoCanvas();
-        window.addEventListener('resize', ajustarResolucaoCanvas);
-
-        // Função para capturar as coordenadas exatas
-        function obterPosicao(e) {
-            const rect = canvas.getBoundingClientRect();
-            if (e.touches && e.touches.length > 0) {
-                return {
-                    x: e.touches[0].clientX - rect.left,
-                    y: e.touches[0].clientY - rect.top
-                };
-            }
-            return {
-                x: e.clientX - rect.left,
-                y: e.clientY - rect.top
-            };
-        }
-
-        function iniciarDesenho(e) {
-            desenhando = true;
-            const pos = obterPosicao(e);
-            ctx.beginPath();
-            ctx.moveTo(pos.x, pos.y);
-            e.preventDefault();
-        }
-
-        function desenhar(e) {
-            if (!desenhando) return;
-            const pos = obterPosicao(e);
-            ctx.lineTo(pos.x, pos.y);
-            ctx.stroke();
-            assinaturaDesenhada = true; // Confirma que houve interação válida
-            if(erroAssinatura) erroAssinatura.style.display = 'none';
-            e.preventDefault();
-        }
-
-        function pararDesenho() {
-            if (desenhando) {
-                desenhando = false;
-                // Atualiza em tempo real o input oculto com o conteúdo em imagem
-                if (assinaturaDesenhada && inputAssinaturaBase64) {
-                    inputAssinaturaBase64.value = canvas.toDataURL('image/png');
-                }
-            }
-        }
-
-        // Eventos para Desktop (Mouse)
-        canvas.addEventListener('mousedown', iniciarDesenho);
-        canvas.addEventListener('mousemove', desenhar);
-        window.addEventListener('mouseup', pararDesenho);
-
-        // Eventos para Dispositivos Móveis (Touchscreen)
-        canvas.addEventListener('touchstart', iniciarDesenho, { passive: false });
-        canvas.addEventListener('touchmove', desenhar, { passive: false });
-        canvas.addEventListener('touchend', pararDesenho);
-
-        // Botão para limpar a assinatura do quadro
-        if (btnLimpar) {
-            btnLimpar.addEventListener('click', () => {
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-                assinaturaDesenhada = false;
-                if(inputAssinaturaBase64) inputAssinaturaBase64.value = '';
-            });
-        }
-    }
-    // =========================================================================
-
-    // Envio unificado e robusto
-    if (form) {
-        form.addEventListener('submit', function(event) {
-            event.preventDefault();
-
-            // Validação visual rápida antes de enviar
-            let valido = true;
-            form.querySelectorAll('.input-group').forEach(group => {
-                const inputs = group.querySelectorAll('input, textarea, select');
-                if (inputs.length > 0) {
-                    let preenchido = true;
-                    if (inputs[0].type === 'radio') {
-                        const name = inputs[0].name;
-                        if (!group.querySelector(`input[name="${name}"]:checked`)) preenchido = false;
-                    } else if (!inputs[0].checkValidity()) {
-                        preenchido = false;
-                    }
-                    if (!preenchido) { group.classList.add('invalid'); valido = false; } 
-                    else { group.classList.remove('invalid'); }
-                }
-            });
-
-            // Validação customizada da assinatura digital obrigatória
-            if (!assinaturaDesenhada) {
-                valido = false;
-                if(erroAssinatura) erroAssinatura.style.display = 'block';
-                const containerAssinatura = document.querySelector('.signature-container');
-                if(containerAssinatura) containerAssinatura.style.borderColor = '#ff4d4d';
-            }
-
-            if (!valido) { alert('Por favor, preencha todos os campos obrigatórios marcados com (*) e colha a assinatura.'); return; }
-
-            const btnFinalizar = document.getElementById('btn-finalizar');
-            if (btnFinalizar) {
-                btnFinalizar.innerText = "Enviando dados e mídias... ⏳";
-                btnFinalizar.disabled = true;
-            }
-
-            // Captura direta usando seletores de ID para evitar falha de Name no HTML
-            const radioEquipamento = document.querySelector('input[name="tipo_equipamento"]:checked');
-            const radioManutencao = document.querySelector('input[name="tipo_manutencao"]:checked');
-            const radioStatus = document.querySelector('input[name="status_servico"]:checked');
-
-            const dadosParaEnvio = new URLSearchParams();
-            dadosParaEnvio.append('cliente', document.getElementById('cliente').value);
-            dadosParaEnvio.append('localizacao_interna', document.getElementById('localizacao_aparelho').value);
-            dadosParaEnvio.append('endereco', document.getElementById('endereco').value);
-            dadosParaEnvio.append('tipo_equipamento', radioEquipamento ? radioEquipamento.value : 'Não informado');
-            dadosParaEnvio.append('marca', document.getElementById('marca').value);
-            dadosParaEnvio.append('modelo', document.getElementById('modelo').value);
-            dadosParaEnvio.append('numero_serie', document.getElementById('numero_serie').value);
-            dadosParaEnvio.append('data_manutencao', campoDataManutencao ? campoDataManutencao.value : '');
-            dadosParaEnvio.append('tipo_manutencao', radioManutencao ? radioManutencao.value : 'Não informado');
-            dadosParaEnvio.append('descricao_problema', document.getElementById('descricao_problema').value);
-            dadosParaEnvio.append('acoes_realizadas', document.getElementById('acoes_realizadas').value);
-            dadosParaEnvio.append('pecas_substituidas', document.getElementById('pecas_substituidas').value || "Nenhuma");
-            dadosParaEnvio.append('status_servico', radioStatus ? radioStatus.value : 'Pendente');
-            dadosParaEnvio.append('parecer_final', document.getElementById('parecer_final').value);
-            
-            // Inclusão da Assinatura no envio para a Planilha
-            dadosParaEnvio.append('assinatura_responsavel', inputAssinaturaBase64 ? inputAssinaturaBase64.value : '');
-
-            // Tratamento das Mídias
-            dadosParaEnvio.append('num_arquivos', listaDeArquivosJson.length);
-            listaDeArquivosJson.forEach((arquivo, index) => {
-                dadosParaEnvio.append('arquivo_' + index, arquivo.base64);
-                dadosParaEnvio.append('tipo_' + index, arquivo.type);
-            });
-
-            // Requisição com content-type explícito
-            fetch(URL_DA_SUA_PLANILHA, {
-                method: 'POST',
-                mode: 'no-cors',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: dadosParaEnvio.toString()
-            })
-            .then(() => {
-                alert('Sucesso absoluto! Dados e mídias salvos na planilha.');
-                form.reset();
-                
-                // Reseta estados do Canvas pós-envio de sucesso
-                if (canvas) {
-                    const ctx = canvas.getContext('2d');
-                    ctx.clearRect(0, 0, canvas.width, canvas.height);
-                }
-                assinaturaDesenhada = false;
-
-                if(campoDataManutencao) campoDataManutencao.value = new Date().toISOString().split('T')[0];
-                if(galeriaPreview) galeriaPreview.innerHTML = '';
-                listaDeArquivosJson = [];
-            })
-            .catch(erro => {
-                console.error('Erro de rede:', erro);
-                alert('Erro de comunicação. Verifique a internet.');
-            })
-            .finally(() => {
-                if (btnFinalizar) {
-                    btnFinalizar.innerText = "Finalizar e Alimentar Planilha";
-                    btnFinalizar.disabled = false;
-                }
-            });
+            const ratio = window.devicePixelRatio || 1;
+            canvas.width = Math.round(rect.width * ratio);
+            canvas.height = Math.round(rect.height * ratio);
+            context.setTransform(ratio, 0, 0, ratio, 0, 0);
+            context.strokeStyle = '#000'; context.lineWidth = 3; context.lineCap = 'round'; context.lineJoin = 'round';
+            if (saved && strokes) { const image = new Image(); image.onload = () => context.drawImage(image, 0, 0, rect.width, rect.height); image.src = saved; }
+        };
+        const position = (event) => { const rect = canvas.getBoundingClientRect(); return { x: event.clientX - rect.left, y: event.clientY - rect.top }; };
+        canvas.addEventListener('pointerdown', (event) => { drawing = true; previous = position(event); canvas.setPointerCapture(event.pointerId); });
+        canvas.addEventListener('pointermove', (event) => {
+            if (!drawing) return;
+            const point = position(event);
+            context.beginPath(); context.moveTo(previous.x, previous.y); context.lineTo(point.x, point.y); context.stroke();
+            previous = point; strokes += 1; signature.value = canvas.toDataURL('image/png'); signatureError.style.display = 'none';
         });
+        canvas.addEventListener('pointerup', () => { drawing = false; });
+        fields.clearSignature.addEventListener('click', () => { context.clearRect(0, 0, canvas.width, canvas.height); strokes = 0; signature.value = ''; });
+        window.addEventListener('resize', setupCanvas);
+        setupCanvas();
     }
+
+    function validateSignature() {
+        const valid = strokes >= CONFIG.minSignatureStrokes && Boolean(fields.signature.value);
+        fields.signatureError.style.display = valid ? 'none' : 'block';
+        fields.canvas.closest('.signature-container').classList.toggle('signature-invalid', !valid);
+        return valid;
+    }
+
+    function validateForm() {
+        let valid = form.checkValidity();
+        form.querySelectorAll('input:not([type="hidden"]), textarea, select').forEach((field) => {
+            const group = field.closest('.input-group');
+            if (group && !field.validity.valid) group.classList.add('invalid');
+        });
+        valid = validateMedia() && validateSignature() && valid;
+        if (!valid) form.querySelector('.invalid input, .invalid textarea, .invalid select, .signature-invalid canvas')?.focus();
+        return valid;
+    }
+
+    function saveDraft() {
+        const draft = Object.fromEntries(new FormData(form).entries());
+        delete draft.assinatura_base64; // Não persistir assinatura ou mídias no navegador.
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(draft));
+    }
+
+    function restoreDraft() {
+        try {
+            const draft = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+            Object.entries(draft).forEach(([name, value]) => {
+                const field = form.elements.namedItem(name);
+                if (field instanceof RadioNodeList) field.value = value;
+                else if (field) field.value = value;
+            });
+            updateAddress(); setTodayIfEmpty();
+        } catch { localStorage.removeItem(STORAGE_KEY); setTodayIfEmpty(); }
+    }
+
+    function formPayload() {
+        const data = Object.fromEntries(new FormData(form).entries());
+        return {
+            ...data,
+            pecas_substituidas: data.pecas_substituidas || 'Nenhuma',
+            assinatura_responsavel: fields.signature.value,
+            arquivos: media.map(({ name, type, size, dataUrl }) => ({ name, type, size, base64: dataUrl }))
+        };
+    }
+
+    async function sendForm() {
+        sending = true;
+        fields.submit.disabled = true;
+        fields.submit.querySelector('.btn-text').textContent = 'Enviando…';
+        fields.submit.querySelector('.btn-spinner').classList.remove('hidden');
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), CONFIG.requestTimeout);
+        try {
+            const response = await fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(formPayload()), signal: controller.signal });
+            if (!response.ok) throw new Error(`O servidor respondeu com erro ${response.status}.`);
+            const result = await response.json().catch(() => { throw new Error('O servidor não retornou uma confirmação válida.'); });
+            if (result.success !== true) throw new Error(result.message || 'O servidor não confirmou o registro.');
+            form.reset(); media = []; strokes = 0; fields.signature.value = ''; fields.canvas.getContext('2d').clearRect(0, 0, fields.canvas.width, fields.canvas.height); renderMedia(); setTodayIfEmpty(); localStorage.removeItem(STORAGE_KEY); setModal('modal-sucesso', true);
+        } catch (error) {
+            const message = error.name === 'AbortError' ? 'A solicitação demorou demais. Verifique a conexão e tente novamente.' : `${error.message} Confirme se o Apps Script permite CORS e responde JSON.`;
+            showError(message);
+        } finally {
+            clearTimeout(timeout); sending = false; fields.submit.disabled = false;
+            fields.submit.querySelector('.btn-text').textContent = 'Finalizar e Alimentar Planilha';
+            fields.submit.querySelector('.btn-spinner').classList.add('hidden');
+        }
+    }
+
+    fields.client.addEventListener('change', () => { updateAddress(); saveDraft(); });
+    fields.media.addEventListener('change', async (event) => { await addMedia([...event.target.files]); event.target.value = ''; });
+    form.addEventListener('input', saveDraft);
+    form.addEventListener('change', (event) => { event.target.closest('.input-group')?.classList.remove('invalid'); saveDraft(); });
+    form.addEventListener('submit', (event) => { event.preventDefault(); if (!sending && validateForm()) setModal('modal-confirmacao', true); });
+    $('#btn-confirmar-modal').addEventListener('click', () => { closeModals(); sendForm(); });
+    $('#btn-cancelar-modal').addEventListener('click', closeModals);
+    $('#btn-fechar-sucesso').addEventListener('click', closeModals);
+    $('#btn-fechar-erro').addEventListener('click', closeModals);
+    document.addEventListener('keydown', (event) => { if (event.key === 'Escape') closeModals(); });
+
+    restoreDraft();
+    initVoiceInput();
+    initSignature();
+    renderMedia();
 });

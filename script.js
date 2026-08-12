@@ -3,18 +3,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // O Apps Script deve responder JSON, por exemplo: { "success": true }.
     // Proteja o endpoint no servidor; a URL pública não é um mecanismo de autenticação.
-    const API_URL = 'https://script.google.com/macros/s/AKfycbwGdWI7gQOrZoJ_N_FM9bIasI4A1uwecSWL5HqVQ83xCxqGGrUsRULk7GYhw8ETUIqsYQ/exec';
+    // Substitua pela URL /exec da implantação ativa do seu Google Apps Script.
+    // O erro 404 indica que a implantação desta URL não está mais disponível.
+    const API_URL = 'https://script.google.com/macros/s/AKfycbyBqniVF28HJq5_KdaF7n8bIf1r4uXSPY90vAFJu1w7f3R8No0LlUXUl6RHQJ8shUx2Jw/exec';
     const STORAGE_KEY = 'formulario_manutencao_v2';
     const CONFIG = {
-        maxFiles: 5,
-        maxImageSize: 5 * 1024 * 1024,
-        maxVideoSize: 10 * 1024 * 1024,
-        maxTotalSize: 15 * 1024 * 1024,
-        imageQuality: 0.8,
-        imageMaxWidth: 1600,
-        imageMaxHeight: 1600,
+        maxFiles: 3,
+        // Fotos grandes são aceitas e compactadas antes do envio.
+        maxImageSize: 8 * 1024 * 1024,
+        // Vídeos não são compactados no navegador; mantê-los pequenos reduz muito o tempo.
+        maxVideoSize: 2 * 1024 * 1024,
+        maxTotalSize: 5 * 1024 * 1024,
+        imageQuality: 0.65,
+        imageMaxWidth: 1280,
+        imageMaxHeight: 1280,
         minSignatureStrokes: 5,
-        requestTimeout: 30000
+        requestTimeout: 120000
     };
     const addresses = {
         MATRIZ: 'Rua Desembargador Leite Albuquerque, 1320 - Aldeota',
@@ -256,6 +260,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const data = Object.fromEntries(new FormData(form).entries());
         return {
             ...data,
+            // O formulário usa este identificador; o Apps Script grava-o como localização interna.
+            localizacao_interna: data.localizacao_aparelho,
             pecas_substituidas: data.pecas_substituidas || 'Nenhuma',
             assinatura_responsavel: fields.signature.value,
             arquivos: media.map(({ name, type, size, dataUrl }) => ({ name, type, size, base64: dataUrl }))
@@ -271,12 +277,29 @@ document.addEventListener('DOMContentLoaded', () => {
         const timeout = setTimeout(() => controller.abort(), CONFIG.requestTimeout);
         try {
             const response = await fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(formPayload()), signal: controller.signal });
+            if (response.status === 404) {
+                throw new Error('A implantação do Google Apps Script não foi encontrada. Publique uma nova implantação Web App e atualize a URL /exec no arquivo script.js.');
+            }
             if (!response.ok) throw new Error(`O servidor respondeu com erro ${response.status}.`);
-            const result = await response.json().catch(() => { throw new Error('O servidor não retornou uma confirmação válida.'); });
-            if (result.success !== true) throw new Error(result.message || 'O servidor não confirmou o registro.');
+            // Apps Script costuma responder JSON como text/plain; por isso lemos o
+            // corpo antes e aceitamos os formatos de sucesso mais usuais.
+            const responseText = (await response.text()).trim();
+            let result;
+            try {
+                result = JSON.parse(responseText);
+            } catch {
+                result = { status: responseText.toLowerCase() };
+            }
+            const confirmed = result.success === true
+                || ['success', 'sucesso', 'ok'].includes(String(result.status || '').toLowerCase())
+                || ['success', 'sucesso', 'ok'].includes(String(result.result || '').toLowerCase())
+                || ['success', 'sucesso', 'ok'].includes(String(result.message || '').toLowerCase());
+            if (!confirmed) throw new Error(result.message || 'O servidor não confirmou o registro.');
             form.reset(); media = []; strokes = 0; fields.signature.value = ''; fields.canvas.getContext('2d').clearRect(0, 0, fields.canvas.width, fields.canvas.height); renderMedia(); setTodayIfEmpty(); localStorage.removeItem(STORAGE_KEY); setModal('modal-sucesso', true);
         } catch (error) {
-            const message = error.name === 'AbortError' ? 'A solicitação demorou demais. Verifique a conexão e tente novamente.' : `${error.message} Confirme se o Apps Script permite CORS e responde JSON.`;
+            const message = error.name === 'AbortError'
+                ? 'A solicitação demorou demais. Verifique a conexão e tente novamente.'
+                : `${error.message}${error.message.includes('não foi encontrada') ? '' : ' Confirme se o Apps Script permite CORS e responde JSON.'}`;
             showError(message);
         } finally {
             clearTimeout(timeout); sending = false; fields.submit.disabled = false;

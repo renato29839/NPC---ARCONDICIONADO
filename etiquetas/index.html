@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NPC - Etiquetas QR</title>
+    <meta name="color-scheme" content="light dark">
+    <link rel="icon" type="image/png" href="../icons/icon-192.png">
+    <!-- Usa o mesmo tema (claro/escuro) escolhido no formulário. -->
+    <script>
+        try { var t = localStorage.getItem('npc_tema'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch (e) {}
+    </script>
+    <link rel="stylesheet" href="etiquetas.css">
+</head>
+<body>
+    <div class="page">
+        <header>
+            <img class="brand-logo" src="../logo-marca.png" alt="NPC Neuropsicocentro">
+            <h1>ETIQUETAS QR</h1>
+            <p>Cole uma etiqueta em cada aparelho. Ao escanear, o formulário abre já preenchido com os dados do equipamento.</p>
+        </header>
+
+        <form id="form-etiqueta" class="card" novalidate>
+            <div class="row">
+                <div class="field">
+                    <label for="cliente">Cliente <span class="required">*</span></label>
+                    <select id="cliente" required>
+                        <option value="" disabled selected>Selecione...</option>
+                        <option value="MATRIZ">MATRIZ</option>
+                        <option value="LIFE">LIFE</option>
+                        <option value="SUL">SUL</option>
+                    </select>
+                    <span class="error">Selecione o cliente.</span>
+                </div>
+                <div class="field">
+                    <label for="local">Localização <span class="required">*</span></label>
+                    <input type="text" id="local" required maxlength="120" placeholder="Ex: Sala 04">
+                    <span class="error">Informe o local.</span>
+                </div>
+            </div>
+            <div class="row">
+                <div class="field">
+                    <label for="tipo">Tipo</label>
+                    <select id="tipo">
+                        <option value="Split">Split</option>
+                        <option value="Janela">Janela</option>
+                        <option value="Central">Central</option>
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="btus">Capacidade (BTUs)</label>
+                    <select id="btus">
+                        <option value="">—</option>
+                        <option>7.000</option><option>9.000</option><option>12.000</option><option>18.000</option>
+                        <option>22.000</option><option>24.000</option><option>30.000</option><option>36.000</option>
+                        <option>42.000</option><option>48.000</option><option>57.000</option><option>60.000</option>
+                    </select>
+                </div>
+            </div>
+            <div class="row">
+                <div class="field">
+                    <label for="marca">Marca</label>
+                    <input type="text" id="marca" maxlength="80">
+                </div>
+                <div class="field">
+                    <label for="modelo">Modelo</label>
+                    <input type="text" id="modelo" maxlength="100">
+                </div>
+            </div>
+            <div class="row">
+                <div class="field">
+                    <label for="serie">Nº de série</label>
+                    <input type="text" id="serie" maxlength="100">
+                </div>
+                <div class="field">
+                    <label for="gas">Gás</label>
+                    <select id="gas">
+                        <option value="">—</option>
+                        <option>R-410A</option><option>R-32</option><option>R-22</option><option>R-407C</option>
+                    </select>
+                </div>
+            </div>
+            <div class="toolbar">
+                <button type="submit" class="btn btn-primary">Adicionar etiqueta</button>
+                <button type="button" class="btn btn-secondary" id="btn-imprimir">Imprimir</button>
+            </div>
+            <p class="help" id="contagem">Nenhuma etiqueta na folha.</p>
+        </form>
+
+        <div class="labels" id="etiquetas"></div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="etiquetas.js"></script>
+</body>
+</html>

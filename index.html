@@ -2,24 +2,74 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>NPC - MANUTENÇÃO</title>
+    <meta name="description" content="Ordem de serviço de manutenção de ar condicionado - NPC Neuropsicocentro">
+    <meta name="theme-color" content="#0d9488" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#0b1120" media="(prefers-color-scheme: dark)">
+    <meta name="color-scheme" content="light dark">
+    <!-- Aplica o tema salvo antes de desenhar a página (evita "piscar" claro ao abrir no modo escuro). -->
+    <script>
+        try { var t = localStorage.getItem('npc_tema'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch (e) {}
+    </script>
+    <link rel="manifest" href="manifest.webmanifest">
+    <link rel="icon" type="image/png" href="icons/icon-192.png">
+    <link rel="apple-touch-icon" href="icons/icon-192.png">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="NPC Manutenção">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div class="app-container">
         <header>
+            <button type="button" class="theme-toggle" id="btn-tema" aria-label="Tema: automático. Tocar para mudar.">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"></svg>
+                <span>Auto</span>
+            </button>
             <img class="brand-logo" src="logo-marca.png" alt="NPC Neuropsicocentro">
             <h1>NPC - MANUTENÇÃO</h1>
             <p>Controle de Equipamentos e Ordem de Serviço - Ar Condicionado</p>
         </header>
 
+        <!-- Relatórios guardados no aparelho aguardando internet -->
+        <div id="fila-envio" class="queue-banner hidden" role="status" aria-live="polite">
+            <p id="fila-texto"></p>
+            <div class="queue-actions">
+                <button type="button" class="btn-queue" id="btn-fila-enviar">Enviar agora</button>
+                <button type="button" class="btn-queue btn-queue-danger hidden" id="btn-fila-descartar">Descartar com erro</button>
+            </div>
+        </div>
+        <div id="aviso" class="notice hidden" role="status" aria-live="polite"></div>
+
         <form id="form-manutencao" novalidate>
-            
+
+            <!-- Campo armadilha para robôs: invisível para pessoas -->
+            <div class="hp" aria-hidden="true">
+                <label for="website">Não preencha</label>
+                <input type="text" id="website" name="website" tabindex="-1" autocomplete="off">
+            </div>
+
+            <!-- SEÇÃO 0: TÉCNICO -->
+            <div class="form-section">
+                <h2>TÉCNICO RESPONSÁVEL</h2>
+                <div class="form-row">
+                    <div class="input-group">
+                        <label for="tecnico_nome">Seu nome <span class="required">*</span></label>
+                        <input type="text" id="tecnico_nome" name="tecnico_nome" required maxlength="80" autocomplete="name" placeholder="Nome do técnico">
+                        <span class="error-message">Informe seu nome.</span>
+                    </div>
+                    <div class="input-group">
+                        <label for="codigo_acesso">Código de acesso</label>
+                        <input type="password" id="codigo_acesso" name="codigo_acesso" maxlength="64" autocomplete="off" placeholder="Fornecido pela coordenação">
+                    </div>
+                </div>
+                <p class="field-help field-help-tight">Nome e código ficam salvos neste aparelho.</p>
+            </div>
+
             <!-- SEÇÃO 1: LOCALIZAÇÃO -->
             <div class="form-section">
                 <h2>1. LOCALIZAÇÃO</h2>
-                
+
                 <div class="input-group">
                     <label for="cliente">Identificação do Cliente <span class="required">*</span></label>
                     <select id="cliente" name="cliente" required>
@@ -33,13 +83,15 @@
 
                 <div class="input-group">
                     <label for="localizacao_aparelho">Localização do Equipamento <span class="required">*</span></label>
-                    <input type="text" id="localizacao_aparelho" name="localizacao_aparelho" required maxlength="120" placeholder="Ex: Sala de Reunião, CPD, Recepção">
+                    <input type="text" id="localizacao_aparelho" name="localizacao_aparelho" required maxlength="120" list="lista-locais" autocomplete="off" placeholder="Ex: Sala 04, Recepção principal">
+                    <datalist id="lista-locais"></datalist>
+                    <p class="field-help">Escolha um local da lista sempre que existir, para o histórico da máquina não se dividir.</p>
                     <span class="error-message">Informe a localização interna.</span>
                 </div>
 
                 <div class="input-group">
-                    <label for="endereco">Endereço Completo <span class="required">*</span></label>
-                    <input type="text" id="endereco" name="endereco" required readonly placeholder="Selecione o cliente acima">
+                    <label for="endereco">Endereço Completo</label>
+                    <input type="text" id="endereco" name="endereco" readonly placeholder="Selecione o cliente acima">
                 </div>
             </div>
 
@@ -48,8 +100,8 @@
                 <h2>2. INFORMAÇÕES DO EQUIPAMENTO</h2>
 
                 <div class="input-group">
-                    <label>Tipo de Equipamento <span class="required">*</span></label>
-                    <div class="radio-tile-group">
+                    <label id="label-tipo-equipamento">Tipo de Equipamento <span class="required">*</span></label>
+                    <div class="radio-tile-group" role="radiogroup" aria-labelledby="label-tipo-equipamento">
                         <label class="radio-tile">
                             <input type="radio" name="tipo_equipamento" value="Split" required>
                             <span class="radio-label">Split</span>
@@ -69,20 +121,69 @@
                 <div class="form-row">
                     <div class="input-group">
                         <label for="marca">Marca <span class="required">*</span></label>
-                        <input type="text" id="marca" name="marca" required maxlength="80" placeholder="Ex: Carrier, LG">
+                        <input type="text" id="marca" name="marca" required maxlength="80" list="lista-marcas" placeholder="Ex: Midea, LG">
+                        <datalist id="lista-marcas">
+                            <option value="Springer Midea"></option>
+                            <option value="Midea"></option>
+                            <option value="Samsung"></option>
+                            <option value="LG"></option>
+                            <option value="Carrier"></option>
+                            <option value="Daikin"></option>
+                            <option value="Gree"></option>
+                            <option value="Elgin"></option>
+                            <option value="Electrolux"></option>
+                            <option value="Fujitsu"></option>
+                            <option value="Philco"></option>
+                            <option value="Consul"></option>
+                        </datalist>
                         <span class="error-message">Informe a marca.</span>
                     </div>
                     <div class="input-group">
-                        <label for="modelo">Modelo <span class="required">*</span></label>
-                        <input type="text" id="modelo" name="modelo" required maxlength="100" placeholder="Ex: ASNW122">
-                        <span class="error-message">Informe o modelo.</span>
+                        <label for="capacidade_btus">Capacidade (BTUs) <span class="required">*</span></label>
+                        <select id="capacidade_btus" name="capacidade_btus" required>
+                            <option value="" disabled selected>Selecione...</option>
+                            <option value="7.000">7.000</option>
+                            <option value="9.000">9.000</option>
+                            <option value="12.000">12.000</option>
+                            <option value="18.000">18.000</option>
+                            <option value="22.000">22.000</option>
+                            <option value="24.000">24.000</option>
+                            <option value="30.000">30.000</option>
+                            <option value="36.000">36.000</option>
+                            <option value="42.000">42.000</option>
+                            <option value="48.000">48.000</option>
+                            <option value="57.000">57.000</option>
+                            <option value="60.000">60.000</option>
+                            <option value="Outra">Outra / não identificada</option>
+                        </select>
+                        <span class="error-message">Selecione a capacidade.</span>
                     </div>
                 </div>
 
                 <div class="input-group">
-                    <label for="numero_serie">Número de Série <span class="required">*</span></label>
-                    <input type="text" id="numero_serie" name="numero_serie" required maxlength="100" placeholder="Ex: SN-987654321">
-                    <span class="error-message">Informe o número de série.</span>
+                    <label for="modelo">Modelo (código da etiqueta) <span class="required">*</span></label>
+                    <input type="text" id="modelo" name="modelo" required maxlength="100" autocapitalize="characters" placeholder="Ex: 42AGVCB09M5">
+                    <p class="field-help">Código impresso na etiqueta do aparelho. A capacidade vai no campo acima.</p>
+                    <span class="error-message">Informe o modelo.</span>
+                </div>
+
+                <div class="form-row">
+                    <div class="input-group">
+                        <label for="numero_serie">Número de Série</label>
+                        <input type="text" id="numero_serie" name="numero_serie" maxlength="100" autocapitalize="characters" placeholder="Se houver na etiqueta">
+                        <span class="error-message">Não repita o modelo aqui; deixe em branco se não houver.</span>
+                    </div>
+                    <div class="input-group">
+                        <label for="gas_refrigerante">Gás Refrigerante</label>
+                        <select id="gas_refrigerante" name="gas_refrigerante">
+                            <option value="">Não identificado</option>
+                            <option value="R-410A">R-410A</option>
+                            <option value="R-32">R-32</option>
+                            <option value="R-22">R-22</option>
+                            <option value="R-407C">R-407C</option>
+                            <option value="Outro">Outro</option>
+                        </select>
+                    </div>
                 </div>
             </div>
 
@@ -90,15 +191,27 @@
             <div class="form-section">
                 <h2>3. O SERVIÇO</h2>
 
-                <div class="input-group">
-                    <label for="data_manutencao">Data do Serviço <span class="required">*</span></label>
-                    <input type="date" id="data_manutencao" name="data_manutencao" required>
-                    <span class="error-message">Informe a data.</span>
+                <div class="form-row form-row-3">
+                    <div class="input-group">
+                        <label for="data_manutencao">Data <span class="required">*</span></label>
+                        <input type="date" id="data_manutencao" name="data_manutencao" required>
+                        <span class="error-message">Data inválida.</span>
+                    </div>
+                    <div class="input-group">
+                        <label for="hora_inicio">Início <span class="required">*</span></label>
+                        <input type="time" id="hora_inicio" name="hora_inicio" required>
+                        <span class="error-message">Informe o início.</span>
+                    </div>
+                    <div class="input-group">
+                        <label for="hora_fim">Término <span class="required">*</span></label>
+                        <input type="time" id="hora_fim" name="hora_fim" required>
+                        <span class="error-message">Depois do início.</span>
+                    </div>
                 </div>
 
                 <div class="input-group">
-                    <label>Tipo de Manutenção <span class="required">*</span></label>
-                    <div class="radio-tile-group">
+                    <label id="label-tipo-manutencao">Tipo de Manutenção <span class="required">*</span></label>
+                    <div class="radio-tile-group" role="radiogroup" aria-labelledby="label-tipo-manutencao">
                         <label class="radio-tile">
                             <input type="radio" name="tipo_manutencao" value="Preventiva" required>
                             <span class="radio-label">Preventiva</span>
@@ -111,11 +224,21 @@
                     <span class="error-message">Selecione o tipo de manutenção.</span>
                 </div>
 
+                <!-- Checklist PMOC: aparece só na preventiva (itens montados pelo script.js) -->
+                <fieldset id="checklist-pmoc" class="checklist" hidden disabled>
+                    <legend>Checklist da preventiva (PMOC)</legend>
+                    <p class="field-help field-help-tight">Marque cada item. Use N/A quando não se aplicar ao aparelho.</p>
+                    <div id="checklist-itens"></div>
+                    <button type="button" class="btn-link" id="btn-checklist-ok">Marcar todos os pendentes como OK</button>
+                    <h3 class="checklist-sub">Medições (opcional)</h3>
+                    <div id="medicoes-itens" class="medicoes"></div>
+                </fieldset>
+
                 <div class="input-group">
                     <label for="descricao_problema">Descrição do Problema / Estado Inicial <span class="required">*</span></label>
                     <div class="textarea-voice-wrapper">
                         <textarea id="descricao_problema" name="descricao_problema" rows="3" required maxlength="2000" placeholder="Relate ruídos, vazamentos..."></textarea>
-                        <button type="button" class="btn-voice" data-target="descricao_problema" title="Digitar por voz">🎙️</button>
+                        <button type="button" class="btn-voice" data-target="descricao_problema" title="Digitar por voz" aria-label="Digitar por voz">🎙️</button>
                     </div>
                     <span class="error-message">Descreva o problema.</span>
                 </div>
@@ -124,7 +247,7 @@
                     <label for="acoes_realizadas">Ações Realizadas <span class="required">*</span></label>
                     <div class="textarea-voice-wrapper">
                         <textarea id="acoes_realizadas" name="acoes_realizadas" rows="3" required maxlength="2000" placeholder="Ex: Limpeza de filtros, higienização..."></textarea>
-                        <button type="button" class="btn-voice" data-target="acoes_realizadas" title="Digitar por voz">🎙️</button>
+                        <button type="button" class="btn-voice" data-target="acoes_realizadas" title="Digitar por voz" aria-label="Digitar por voz">🎙️</button>
                     </div>
                     <span class="error-message">Informe as ações realizadas.</span>
                 </div>
@@ -142,7 +265,7 @@
                 <div class="input-group">
                     <label>Fotos e Vídeos do Estado do Equipamento <span class="required">*</span></label>
                     <div class="upload-container">
-                        <label for="arquivos_midia" class="btn-upload-design">
+                        <label for="arquivos_midia" class="btn-upload-design" tabindex="0" role="button">
                             <span>Capturar ou Anexar Mídias</span>
                         </label>
                         <input type="file" id="arquivos_midia" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm" multiple class="hidden" aria-describedby="ajuda-midia">
@@ -157,14 +280,14 @@
                     <label for="parecer_final">Parecer Final Técnico / Recomendações <span class="required">*</span></label>
                     <div class="textarea-voice-wrapper">
                         <textarea id="parecer_final" name="parecer_final" rows="3" required maxlength="2000" placeholder="Considerações finais..."></textarea>
-                        <button type="button" class="btn-voice" data-target="parecer_final" title="Digitar por voz">🎙️</button>
+                        <button type="button" class="btn-voice" data-target="parecer_final" title="Digitar por voz" aria-label="Digitar por voz">🎙️</button>
                     </div>
                     <span class="error-message">Informe o parecer técnico.</span>
                 </div>
 
                 <div class="input-group">
-                    <label>Status Final do Equipamento <span class="required">*</span></label>
-                    <div class="radio-tile-group">
+                    <label id="label-status">Status Final do Equipamento <span class="required">*</span></label>
+                    <div class="radio-tile-group" role="radiogroup" aria-labelledby="label-status">
                         <label class="radio-tile status-concluido">
                             <input type="radio" name="status_servico" value="Concluido" required>
                             <span class="radio-label">Concluído</span>
@@ -176,41 +299,64 @@
                     </div>
                     <span class="error-message">Selecione o status final.</span>
                 </div>
+            </div>
+
+            <!-- SEÇÃO 5: ACEITE -->
+            <div class="form-section">
+                <h2>5. ACEITE DA UNIDADE</h2>
+
+                <div class="form-row">
+                    <div class="input-group">
+                        <label for="responsavel_nome">Nome do Responsável <span class="required">*</span></label>
+                        <input type="text" id="responsavel_nome" name="responsavel_nome" required maxlength="80" placeholder="Quem acompanhou o serviço">
+                        <span class="error-message">Informe o nome.</span>
+                    </div>
+                    <div class="input-group">
+                        <label for="responsavel_cargo">Cargo / Setor</label>
+                        <input type="text" id="responsavel_cargo" name="responsavel_cargo" maxlength="60" placeholder="Ex: Recepção">
+                    </div>
+                </div>
+
+                <div class="input-group">
+                    <label for="email_os">Enviar a OS em PDF para (opcional)</label>
+                    <input type="email" id="email_os" name="email_os" maxlength="120" inputmode="email" autocomplete="email" placeholder="email@exemplo.com">
+                    <span class="error-message">E-mail inválido.</span>
+                </div>
 
                 <div class="input-group">
                     <label>Assinatura do Responsável na Unidade <span class="required">*</span></label>
                     <div class="signature-container">
-                        <canvas id="canvas-assinatura"></canvas>
+                        <canvas id="canvas-assinatura" aria-label="Área para assinatura"></canvas>
                         <button type="button" id="btn-limpar-assinatura">LIMPAR</button>
                     </div>
-                    <input type="hidden" id="assinatura_base64" name="assinatura_base64" required>
+                    <input type="hidden" id="assinatura_base64" name="assinatura_base64">
                     <span class="error-message" id="erro-assinatura" style="display:none;">Colha a assinatura do responsável.</span>
                 </div>
             </div>
 
             <button type="submit" class="btn-submit" id="btn-finalizar">
-                <span class="btn-text">Finalizar e Alimentar Planilha</span>
+                <span class="btn-text">Revisar e Enviar</span>
                 <span class="btn-spinner hidden" aria-hidden="true"></span>
             </button>
         </form>
     </div>
 
     <!-- Modais de Feedback -->
-    <div id="modal-confirmacao" class="modal hidden">
-        <div class="modal-content">
-            <h2>Confirmar Envio</h2>
-            <p>Deseja finalizar e enviar os dados para a planilha?</p>
+    <div id="modal-confirmacao" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="titulo-confirmacao">
+        <div class="modal-content modal-review">
+            <h2 id="titulo-confirmacao">Revise antes de enviar</h2>
+            <dl id="resumo-envio" class="review-list"></dl>
             <div class="modal-buttons">
-                <button type="button" class="btn-modal btn-modal-cancel" id="btn-cancelar-modal">Voltar</button>
-                <button type="button" class="btn-modal btn-modal-confirm" id="btn-confirmar-modal">Confirmar</button>
+                <button type="button" class="btn-modal btn-modal-cancel" id="btn-cancelar-modal">Corrigir</button>
+                <button type="button" class="btn-modal btn-modal-confirm" id="btn-confirmar-modal">Confirmar envio</button>
             </div>
         </div>
     </div>
 
-    <div id="modal-sucesso" class="modal hidden">
+    <div id="modal-sucesso" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="titulo-sucesso">
         <div class="modal-content">
-            <h2 style="color: var(--success);">✓ Sucesso!</h2>
-            <p>Dados enviados corretamente.</p>
+            <h2 id="titulo-sucesso" style="color: var(--success);">✓ Sucesso!</h2>
+            <p id="modal-sucesso-mensagem">Dados enviados corretamente.</p>
             <button type="button" class="btn-modal btn-modal-confirm" id="btn-fechar-sucesso">OK</button>
         </div>
     </div>

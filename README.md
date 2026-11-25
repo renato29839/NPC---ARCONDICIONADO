@@ -45,6 +45,9 @@ O app offline exige `https` (o GitHub Pages já usa).
      que descubra a URL consegue gravar na planilha.
    - `EMAIL_COPIA`: e-mails (separados por vírgula) que recebem o PDF de toda OS.
    - `LOGO_FILE_ID`: ID de uma imagem do logo no Drive, para o cabeçalho do PDF.
+   - `PASTA_PDF_ID`: link (ou ID) da pasta do Drive da empresa onde os PDFs das OS são salvos,
+     com uma subpasta por cliente. A pasta precisa estar compartilhada como **Editor** com a conta
+     que publica o Apps Script. Sem ela, o PDF fica junto das fotos, na pasta da OS.
 4. **Implantar > Gerenciar implantações > editar (lápis) > Versão: Nova versão > Implantar.**
    Editar a implantação existente mantém a mesma URL `/exec`. Executar como: **Eu**; acesso:
    **Qualquer pessoa**.

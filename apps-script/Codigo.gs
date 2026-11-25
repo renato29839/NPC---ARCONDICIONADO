@@ -10,6 +10,10 @@
  *                  que descubra a URL /exec consegue gravar na planilha.
  *   EMAIL_COPIA    E-mails separados por vírgula que recebem o PDF de toda OS.
  *   LOGO_FILE_ID   ID de uma imagem no Drive para o cabeçalho do PDF.
+ *   PASTA_PDF_ID   ID (ou link) da pasta do Drive da empresa onde os PDFs das OS são salvos,
+ *                  separados em subpastas por cliente. A conta que publica este script precisa
+ *                  ter acesso de EDITOR a essa pasta. Sem a propriedade (ou se a pasta não
+ *                  estiver acessível), o PDF fica na pasta da OS em EVIDENCIAS_MANUTENCAO.
  */
 const NPC_CONFIG = {
   sheetName: 'Página1',
@@ -305,7 +309,29 @@ function createPdf_(data, numeroOs, folder) {
   const html = buildPdfHtml_(data, numeroOs);
   const pdf = Utilities.newBlob(html, 'text/html', numeroOs + '.html').getAs('application/pdf')
     .setName(numeroOs + ' - ' + value_(data, 'cliente') + ' - ' + value_(data, 'localizacao_interna') + '.pdf');
-  return folder.createFile(pdf);
+  return (companyPdfFolder_(value_(data, 'cliente')) || folder).createFile(pdf);
+}
+
+/**
+ * Pasta do Drive da empresa para os PDFs (propriedade PASTA_PDF_ID), com uma subpasta por cliente.
+ * Devolve null se não houver configuração ou se a pasta não estiver acessível; aí o PDF fica na
+ * pasta da OS, e o motivo vai para a aba LOG_ERROS.
+ */
+function companyPdfFolder_(cliente) {
+  const raw = PropertiesService.getScriptProperties().getProperty('PASTA_PDF_ID');
+  if (!raw) return null;
+  // Aceita o ID puro ou o link copiado do Drive (".../folders/<ID>?usp=...").
+  const match = String(raw).match(/folders\/([\w-]{10,})/) || String(raw).match(/^\s*([\w-]{10,})\s*$/);
+  if (!match) {
+    log_('AVISO', 'PASTA_PDF_ID inválida: ' + raw);
+    return null;
+  }
+  try {
+    return getOrCreateFolder_(DriveApp.getFolderById(match[1]), cliente || 'SEM CLIENTE');
+  } catch (error) {
+    log_('AVISO', 'Sem acesso à pasta de PDFs da empresa (' + match[1] + '): ' + error.message);
+    return null;
+  }
 }
 
 function buildPdfHtml_(data, numeroOs) {

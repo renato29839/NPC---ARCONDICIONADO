@@ -23,7 +23,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const ADDRESSES = {
         MATRIZ: 'Rua Desembargador Leite Albuquerque, 1320 - Aldeota',
         LIFE: 'Rua Coronel Linhares, 1143 - Aldeota',
-        SUL: 'Rua Virgilio Paes, 3020 - Cidades dos Funcionários'
+        SUL: 'Rua Virgilio Paes, 3020 - Cidades dos Funcionários',
+        PARQUELANDIA: 'Rua Padre Guerra, 1088 - Parquelandia'
     };
     // Itens do PMOC (Lei 13.589/2018) aplicáveis a splits, janelas e centrais de pequeno porte.
     const CHECKLIST = [

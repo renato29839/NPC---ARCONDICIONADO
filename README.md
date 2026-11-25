@@ -69,3 +69,15 @@ no Drive de quem publicou o Apps Script.
 Abra `<endereço do site>/etiquetas/` no site publicado, cadastre cada aparelho, clique em **Imprimir** e cole
 as etiquetas (de preferência em papel adesivo plastificado). O link pode ser aberto por
 qualquer câmera de celular.
+
+## Cadastrar um cliente novo
+
+Um cliente (unidade) precisa ser incluído em **quatro lugares**, sempre com o mesmo nome
+(maiúsculas e acentos iguais):
+
+1. `index.html`: uma `<option>` na lista "Identificação do Cliente".
+2. `script.js`: o endereço em `ADDRESSES`.
+3. `etiquetas/index.html`: uma `<option>` na lista "Cliente".
+4. `apps-script/Codigo.gs`: o nome em `NPC_CONFIG.clientes`. Depois, cole o código no editor do
+   Apps Script e publique uma **nova versão** da implantação (Implantar > Gerenciar implantações >
+   lápis > Nova versão). Sem esse passo, o envio é recusado com "Cliente inválido".

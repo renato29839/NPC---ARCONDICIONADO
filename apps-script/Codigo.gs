@@ -20,7 +20,9 @@ const NPC_CONFIG = {
   maxTotalBytes: 8 * 1024 * 1024,
   maxTextLength: 2000,
   lockWaitMs: 25000,
-  clientes: ['MATRIZ', 'LIFE', 'SUL'],
+  // Ao cadastrar um cliente novo, inclua-o aqui E no formulário (index.html + ADDRESSES no script.js)
+  // e nas etiquetas (etiquetas/index.html). Sem isso o envio é recusado com "Cliente inválido".
+  clientes: ['MATRIZ', 'LIFE', 'SUL', 'PARQUELANDIA'],
   tiposEquipamento: ['Split', 'Janela', 'Central'],
   tiposManutencao: ['Preventiva', 'Corretiva'],
   status: ['Concluido', 'Pendente'],

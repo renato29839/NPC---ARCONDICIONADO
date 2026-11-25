@@ -51,7 +51,7 @@ function doGet(e) {
   const acao = (e && e.parameter && e.parameter.acao) || '';
   if (acao !== 'locais') return response_('ok', 'Serviço ativo.');
   const cache = CacheService.getScriptCache();
-  const cached = cache.get('locais_v1');
+  const cached = cache.get('locais_v2');
   if (cached) return response_('ok', 'Locais cadastrados.', JSON.parse(cached));
 
   const sheet = getSheet_();
@@ -72,7 +72,7 @@ function doGet(e) {
     data[cliente] = Object.keys(locais[cliente]).map(function (k) { return locais[cliente][k]; })
       .sort(function (a, b) { return a.localeCompare(b, 'pt-BR', { numeric: true }); });
   });
-  cache.put('locais_v1', JSON.stringify(data), 600);
+  cache.put('locais_v2', JSON.stringify(data), 600);
   return response_('ok', 'Locais cadastrados.', data);
 }
 
@@ -133,7 +133,7 @@ function doPost(e) {
     ]]);
     SpreadsheetApp.flush();
     commitOsNumber_(os);
-    CacheService.getScriptCache().remove('locais_v1');
+    CacheService.getScriptCache().remove('locais_v2');
     record = { sheet: sheet, row: row, numeroOs: os.numero, folder: folder, evidencias: evidenceLinks.length };
   } catch (error) {
     log_('ERRO', (error && error.stack) || String(error));
@@ -420,7 +420,11 @@ function safeCell_(text) { return /^[=+\-@]/.test(text) ? "'" + text : text; }
 
 function extractBase64_(dataUrl) { return String(dataUrl || '').split(',').pop(); }
 function isEmail_(email) { return /^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+$/.test(email); }
-function normalize_(text) { return String(text).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim(); }
+/** Chave para comparar locais: ignora acentos, espaços, pontuação e zeros à esquerda ("Sala 02" = "sala 2"). */
+function normalize_(text) {
+  return String(text).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]/g, '').replace(/(^|\D)0+(\d)/g, '$1$2');
+}
 function esc_(text) {
   return String(text == null ? '' : text).replace(/[&<>"']/g, function (c) {
     return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
